@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase, resetConfiguration } from '../lib/supabaseClient';
 import { Sparkles, Lock, Mail, Loader2, UserPlus, LogIn, RefreshCw } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,6 +49,10 @@ const LoginPage: React.FC = () => {
         
         if (data.session) {
           setMessage('เข้าสู่ระบบสำเร็จ! กำลังโหลด...');
+          // Redirect to dashboard after successful login
+          setTimeout(() => {
+            navigate('/');
+          }, 500);
         }
       } else {
         const { data, error } = await supabase.auth.signUp({
@@ -69,6 +75,10 @@ const LoginPage: React.FC = () => {
         if (data.user && data.session) {
             // Auto login success (if email confirm is disabled)
              setMessage('สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...');
+             // Redirect to dashboard after successful registration
+             setTimeout(() => {
+               navigate('/');
+             }, 500);
         } else if (data.user && !data.session) {
             // Email confirmation required
             setMessage('สมัครสมาชิกสำเร็จ! กรุณาตรวจสอบอีเมลของท่านเพื่อยืนยันตัวตนก่อนเข้าสู่ระบบ');
