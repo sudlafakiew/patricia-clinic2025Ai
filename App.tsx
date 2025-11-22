@@ -12,6 +12,7 @@ import LoginPage from './components/LoginPage';
 import SetupPage from './components/SetupPage';
 import SettingsPage from './components/SettingsPage';
 import DatabaseSetupGuide from './components/DatabaseSetupGuide';
+import SalesReportPage from './components/SalesReportPage';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { isConfigured } from './lib/supabaseClient';
@@ -19,13 +20,67 @@ import { Menu, Sparkles, PanelLeftOpen } from 'lucide-react';
 
 // Inner layout to consume ClinicContext
 const ClinicLayout: React.FC = () => {
-  const { dbConnectionError } = useClinic();
+  const { dbConnectionError, isLoadingData, skipLoadingAndContinue } = useClinic();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+  const [showLoadingTimeout, setShowLoadingTimeout] = useState(false);
+
+  // Show timeout message after 10 seconds
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isLoadingData) {
+        setShowLoadingTimeout(true);
+      }
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [isLoadingData]);
+
+  // Reset timeout message when loading completes
+  React.useEffect(() => {
+    if (!isLoadingData) {
+      setShowLoadingTimeout(false);
+    }
+  }, [isLoadingData]);
 
   // Check for missing tables error
   if (dbConnectionError === 'MISSING_TABLES') {
     return <DatabaseSetupGuide />;
+  }
+
+  // Show loading overlay while data is being fetched
+  if (isLoadingData) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-4 max-w-sm mx-auto px-4">
+          <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-cyan-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-200 animate-pulse">
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-gray-800">กำลังโหลดข้อมูลคลินิก...</p>
+            <p className="text-xs text-gray-500 mt-1">Loading clinic data...</p>
+          </div>
+          <div className="flex gap-1">
+            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+          </div>
+          {showLoadingTimeout && (
+            <div className="w-full space-y-3">
+              <div className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200 text-center">
+                <p className="font-medium mb-1">⏱️ โหลดข้อมูลใช้เวลานานกว่าปกติ</p>
+                <p className="text-xs">ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตหรือ Supabase credentials</p>
+              </div>
+              <button
+                onClick={skipLoadingAndContinue}
+                className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+              >
+                ▶ ดำเนินการต่อไป (Continue Anyway)
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
   const handleSidebarClose = () => {
@@ -95,6 +150,7 @@ const ClinicLayout: React.FC = () => {
             <Route path="/services" element={<ServicesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/pos" element={<POSPage />} />
+            <Route path="/sales-report" element={<SalesReportPage />} />
             <Route path="/ai-consultant" element={<AIConsultant />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
@@ -108,7 +164,24 @@ const ProtectedLayout: React.FC = () => {
   const { session, loading } = useAuth();
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center bg-gray-50 text-gray-400">Loading...</div>;
+    return (
+      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-cyan-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-cyan-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-200 animate-pulse">
+            <Sparkles className="w-8 h-8 text-white" />
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold text-gray-800">Patricia Clinic Manager</p>
+            <p className="text-sm text-gray-500 mt-1">กำลังโหลดข้อมูล...</p>
+          </div>
+          <div className="flex gap-1 mt-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!session) {

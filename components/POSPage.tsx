@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useClinic } from '../context/ClinicContext';
-import { Search, ShoppingCart, Plus, X, CreditCard, Banknote, QrCode, Package, Sparkles, Check, Layers, Zap, ChevronDown, ChevronUp, UserPlus, Loader2 } from 'lucide-react';
+import { Search, ShoppingCart, Plus, X, CreditCard, Banknote, QrCode, Package, Sparkles, Check, Layers, Zap, ChevronDown, ChevronUp, UserPlus, Loader2, Printer } from 'lucide-react';
 import { CourseDefinition, Service } from '../types';
 
 interface CartItem {
@@ -9,6 +9,7 @@ interface CartItem {
     name: string;
     price: number;
     quantity: number;
+    originalPrice?: number;
 }
 
 const POSPage: React.FC = () => {
@@ -22,6 +23,8 @@ const POSPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'services' | 'courses'>('courses');
   const [isSuccess, setIsSuccess] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState<any>(null);
+  const [showReceipt, setShowReceipt] = useState(false);
   
   // Quick Add Customer Modal
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
@@ -31,6 +34,10 @@ const POSPage: React.FC = () => {
   
   // Animation State
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  
+  // Price Edit State
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingPrice, setEditingPrice] = useState<string>('');
 
   // Derived
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -53,15 +60,51 @@ const POSPage: React.FC = () => {
       setCart(cart.filter((_, i) => i !== index));
   };
 
-  const handleCheckout = () => {
+  const updateCartItemPrice = (index: number, newPrice: number) => {
+      const updatedCart = [...cart];
+      updatedCart[index] = {
+          ...updatedCart[index],
+          originalPrice: updatedCart[index].originalPrice || updatedCart[index].price,
+          price: newPrice
+      };
+      setCart(updatedCart);
+      setEditingIndex(null);
+      setEditingPrice('');
+  };
+
+  const handleCheckout = async () => {
       if (!selectedCustomerId) {
           alert('กรุณาเลือกลูกค้าก่อนชำระเงิน');
           return;
       }
-      processSale(selectedCustomerId, cart, paymentMethod);
+      
+      // Process sale and get transaction data
+      const transactionData = {
+          customerId: selectedCustomerId,
+          items: cart.map(item => ({
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity
+          })),
+          totalAmount: total,
+          paymentMethod: paymentMethod,
+          date: new Date().toISOString()
+      };
+      
+      await processSale(selectedCustomerId, cart, paymentMethod);
+      
+      // Store transaction for receipt
+      setLastTransaction({
+          ...transactionData,
+          id: `TXN-${Date.now()}`
+      });
+      
       setIsSuccess(true);
       setCart([]);
-      setTimeout(() => setIsSuccess(false), 3000);
+      setTimeout(() => {
+          setIsSuccess(false);
+          setShowReceipt(true);
+      }, 1000);
       setIsMobileCartOpen(false);
   };
 
@@ -238,16 +281,17 @@ const POSPage: React.FC = () => {
             ) : (
                 cart.map((item, idx) => {
                     const isCourse = item.type === 'course';
+                    const isEditing = editingIndex === idx;
                     return (
                         <div key={`${item.id}-${idx}`} className="relative flex justify-between items-center p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow group animate-fadeIn">
                             {/* Type Indicator Strip */}
                             <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${isCourse ? 'bg-purple-500' : 'bg-rose-500'}`}></div>
                             
-                            <div className="flex items-center gap-3 pl-2 overflow-hidden">
+                            <div className="flex items-center gap-3 pl-2 overflow-hidden flex-1">
                                 <div className={`p-2 rounded-lg flex-shrink-0 ${isCourse ? 'bg-purple-50 text-purple-600' : 'bg-rose-50 text-rose-600'}`}>
                                     {isCourse ? <Package size={20} /> : <Sparkles size={20} />}
                                 </div>
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                     <p className="font-bold text-sm text-gray-800 truncate">{item.name}</p>
                                     <div className="flex items-center gap-2">
                                         <span className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ${
@@ -260,7 +304,67 @@ const POSPage: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex flex-col items-end gap-1 pl-2 flex-shrink-0">
-                                <span className="font-bold text-gray-900">฿{(item.price * item.quantity).toLocaleString()}</span>
+                                {isEditing ? (
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            type="number"
+                                            autoFocus
+                                            value={editingPrice}
+                                            onChange={(e) => setEditingPrice(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const newPrice = parseFloat(editingPrice);
+                                                    if (!isNaN(newPrice) && newPrice > 0) {
+                                                        updateCartItemPrice(idx, newPrice);
+                                                    }
+                                                } else if (e.key === 'Escape') {
+                                                    setEditingIndex(null);
+                                                    setEditingPrice('');
+                                                }
+                                            }}
+                                            className="w-20 px-2 py-1 border border-rose-500 rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-rose-400"
+                                            placeholder="ราคา"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                const newPrice = parseFloat(editingPrice);
+                                                if (!isNaN(newPrice) && newPrice > 0) {
+                                                    updateCartItemPrice(idx, newPrice);
+                                                }
+                                            }}
+                                            className="px-2 py-1 bg-green-500 text-white rounded text-xs font-medium hover:bg-green-600"
+                                        >
+                                            ✓
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setEditingIndex(null);
+                                                setEditingPrice('');
+                                            }}
+                                            className="px-2 py-1 bg-gray-400 text-white rounded text-xs font-medium hover:bg-gray-500"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                setEditingIndex(idx);
+                                                setEditingPrice(item.price.toString());
+                                            }}
+                                            className="font-bold text-gray-900 hover:text-rose-600 cursor-pointer transition"
+                                            title="คลิกเพื่อแก้ไขราคา"
+                                        >
+                                            ฿{(item.price * item.quantity).toLocaleString()}
+                                        </button>
+                                        {item.originalPrice && item.originalPrice !== item.price && (
+                                            <span className="text-[10px] text-gray-400 line-through">
+                                                ฿{(item.originalPrice * item.quantity).toLocaleString()}
+                                            </span>
+                                        )}
+                                    </>
+                                )}
                                 <button 
                                     onClick={() => removeFromCart(idx)} 
                                     className="text-gray-300 hover:text-red-500 transition lg:opacity-0 group-hover:opacity-100 p-1"
@@ -379,6 +483,144 @@ const POSPage: React.FC = () => {
               </div>
           </div>
        )}
+
+      {/* Receipt Modal */}
+      {showReceipt && lastTransaction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800">ใบเสร็จรับเงิน</h3>
+                <button
+                  onClick={() => setShowReceipt(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <ReceiptView 
+                transaction={lastTransaction} 
+                customer={customers.find(c => c.id === lastTransaction.customerId)}
+              />
+              
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    const printWindow = window.open('', '_blank');
+                    if (printWindow) {
+                      printWindow.document.write(`
+                        <html>
+                          <head><title>ใบเสร็จ</title></head>
+                          <body style="font-family: Arial, sans-serif; padding: 20px;">
+                            ${document.getElementById('receipt-content')?.innerHTML || ''}
+                          </body>
+                        </html>
+                      `);
+                      printWindow.document.close();
+                      printWindow.print();
+                    }
+                  }}
+                  className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                >
+                  <Printer size={18} />
+                  พิมพ์ใบเสร็จ
+                </button>
+                <button
+                  onClick={() => setShowReceipt(false)}
+                  className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  ปิด
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Receipt View Component
+const ReceiptView: React.FC<{ transaction: any; customer?: any }> = ({ transaction, customer }) => {
+  const items = Array.isArray(transaction.items) ? transaction.items : [];
+  const date = new Date(transaction.date);
+
+  return (
+    <div id="receipt-content" className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+      <div className="text-center mb-4">
+        <h2 className="text-xl font-bold mb-1">Patricia Clinic</h2>
+        <p className="text-sm text-gray-600">ใบเสร็จรับเงิน / Receipt</p>
+      </div>
+
+      <div className="border-t border-b border-gray-300 py-3 mb-4 space-y-1 text-sm">
+        <div className="flex justify-between">
+          <span className="text-gray-600">เลขที่บิล:</span>
+          <span className="font-mono font-medium">{transaction.id.substring(0, 8).toUpperCase()}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">วันที่:</span>
+          <span>{date.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">เวลา:</span>
+          <span>{date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+        {customer && (
+          <>
+            <div className="flex justify-between">
+              <span className="text-gray-600">ลูกค้า:</span>
+              <span className="font-medium">{customer.name}</span>
+            </div>
+            {customer.phone && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">เบอร์โทร:</span>
+                <span>{customer.phone}</span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-300">
+              <th className="text-left py-2 text-gray-600">รายการ</th>
+              <th className="text-center py-2 text-gray-600">จำนวน</th>
+              <th className="text-right py-2 text-gray-600">ราคา</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item: any, idx: number) => (
+              <tr key={idx} className="border-b border-gray-200">
+                <td className="py-2">{item.name}</td>
+                <td className="text-center py-2">{item.quantity}</td>
+                <td className="text-right py-2">฿{(item.price * item.quantity).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="border-t-2 border-gray-400 pt-3 mb-4">
+        <div className="flex justify-between text-lg font-bold mb-2">
+          <span>ยอดรวมทั้งสิ้น:</span>
+          <span>฿{transaction.totalAmount.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between text-sm text-gray-600">
+          <span>วิธีชำระ:</span>
+          <span>
+            {transaction.paymentMethod === 'Cash' ? 'เงินสด' :
+             transaction.paymentMethod === 'Credit Card' ? 'บัตรเครดิต' : 'โอนเงิน'}
+          </span>
+        </div>
+      </div>
+
+      <div className="text-center text-xs text-gray-500 border-t border-gray-300 pt-3">
+        <p>ขอบคุณที่ใช้บริการ</p>
+        <p>Thank you for your business</p>
+      </div>
     </div>
   );
 };

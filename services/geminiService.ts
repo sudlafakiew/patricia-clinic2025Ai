@@ -1,17 +1,29 @@
 import { GoogleGenAI } from "@google/genai";
 import { Service } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+// Read from Vite's runtime env first, fall back to process.env for other setups
+const runtimeEnv: any = (typeof import.meta !== 'undefined' && (import.meta as any).env) ? (import.meta as any).env : {};
+const apiKey = (runtimeEnv.VITE_GEMINI_API_KEY as string) || process.env?.VITE_GEMINI_API_KEY || process.env?.GEMINI_API_KEY || '';
+let ai: GoogleGenAI | null = null;
+
+if (apiKey) {
+  try {
+    ai = new GoogleGenAI({ apiKey });
+  } catch (e) {
+    console.error('Failed to initialize GoogleGenAI client:', e);
+    ai = null;
+  }
+}
 
 export const generateConsultationPlan = async (
   symptoms: string,
   availableServices: Service[],
   customerName: string
 ): Promise<{ recommendation: string; recommendedServices: string[] }> => {
-  if (!apiKey) {
+  if (!apiKey || !ai) {
+    console.error("❌ Gemini API Key not configured. Please set VITE_GEMINI_API_KEY in .env.local");
     return {
-      recommendation: "กรุณาตั้งค่า API KEY เพื่อใช้งานฟีเจอร์ AI (Please configure API Key)",
+      recommendation: "⚠️ Gemini API ยังไม่ได้ตั้งค่า\n\nกรุณาดำเนินการตั้งค่า:\n1. สร้างไฟล์ .env.local\n2. เพิ่ม: VITE_GEMINI_API_KEY=your-key-here\n3. รีสตาร์ท dev server\n\n(Please configure API Key in .env.local)",
       recommendedServices: []
     };
   }
@@ -52,16 +64,20 @@ export const generateConsultationPlan = async (
     if (!text) throw new Error("No response from AI");
     return JSON.parse(text);
   } catch (error) {
-    console.error("Gemini Error:", error);
+    console.error("❌ Gemini Error:", error);
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     return {
-      recommendation: "เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI (Error connecting to AI)",
+      recommendation: `เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI:\n\n${errorMsg}\n\n(Error connecting to AI: ${errorMsg})`,
       recommendedServices: []
     };
   }
 };
 
 export const generateServiceImage = async (serviceName: string, category: string): Promise<string | null> => {
-  if (!apiKey) return null;
+  if (!apiKey || !ai) {
+    console.warn("⚠️ Gemini API Key not configured. Image generation skipped.");
+    return null;
+  }
 
   const prompt = `A professional, photorealistic, high-quality aesthetic clinic promotional image for a service called "${serviceName}" (Category: ${category}). 
   The image should be clean, minimalist, soft lighting, spa-like atmosphere, and reassuring. 
@@ -91,8 +107,27 @@ export const generateServiceImage = async (serviceName: string, category: string
       }
     }
     return null;
-  } catch (error) {
-    console.error("Gemini Image Gen Error:", error);
+  } catch (error: any) {
+    // Parse error for better user messaging
+    const errorCode = error?.status || error?.code;
+    const errorMsg = error?.message || String(error);
+    
+    if (errorCode === 429 || errorCode === 'RESOURCE_EXHAUSTED' || errorMsg.includes('quota') || errorMsg.includes('Quota exceeded')) {
+      console.error("❌ Gemini Image Gen Error: Quota Exceeded - Free tier limit reached");
+      console.error("Details:", {
+        status: errorCode,
+        message: errorMsg,
+        timestamp: new Date().toISOString()
+      });
+      return null;
+    }
+    
+    if (errorCode === 401 || errorCode === 'UNAUTHENTICATED' || errorMsg.includes('invalid') || errorMsg.includes('authentication')) {
+      console.error("❌ Gemini Image Gen Error: Invalid API Key");
+      return null;
+    }
+    
+    console.error("❌ Gemini Image Gen Error:", error);
     return null;
   }
 };

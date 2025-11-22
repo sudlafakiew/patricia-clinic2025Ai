@@ -141,7 +141,7 @@ const ServicesPage: React.FC = () => {
     if (base64Image) {
       await updateService(serviceId, { imageUrl: base64Image });
     } else {
-      alert('Failed to generate image. Please ensure API Key is valid.');
+      alert('❌ ไม่สามารถสร้างรูปภาพได้\n\nเหตุผลที่อาจเกิดขึ้น:\n• เกินโควต้า AI ฟรี (Quota Exceeded)\n• API Key ไม่ถูกต้อง\n• ไม่มี Internet\n\nวิธีแก้:\n1. ใช้รูปภาพของคุณเอง (Upload)\n2. รอ 24 ชั่วโมง (quota reset)\n3. ตรวจสอบ Google Cloud Console');
     }
     setGeneratingId(null);
   };

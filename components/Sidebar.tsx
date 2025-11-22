@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Calendar, Users, Sparkles, ShoppingCart, Package, LogOut, Tag, X, PanelLeftClose, Settings } from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Sparkles, ShoppingCart, Package, LogOut, Tag, X, PanelLeftClose, Settings, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -52,6 +52,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
            <NavLink to="/pos" className={navClass} onClick={() => window.innerWidth < 768 && onClose?.()}>
             <ShoppingCart size={20} />
             <span>การขาย (POS)</span>
+          </NavLink>
+          <NavLink to="/sales-report" className={navClass} onClick={() => window.innerWidth < 768 && onClose?.()}>
+            <FileText size={20} />
+            <span>รายงานขาย (Sales Report)</span>
           </NavLink>
            <NavLink to="/inventory" className={navClass} onClick={() => window.innerWidth < 768 && onClose?.()}>
             <Package size={20} />

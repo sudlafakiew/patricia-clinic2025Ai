@@ -4,7 +4,7 @@ import { Search, Phone, Mail, UserPlus, ArrowLeft, Calendar, Package, Clock, Act
 import { Customer, CustomerCourse } from '../types';
 
 const CustomerPage: React.FC = () => {
-  const { customers, addCustomer, updateCustomer, deleteCustomer, useCourse, courseDefinitions, inventory } = useClinic();
+  const { customers, addCustomer, updateCustomer, deleteCustomer, useCourse, courseDefinitions, inventory, addTreatmentRecord, transactions, updateTransaction } = useClinic();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   
@@ -25,6 +25,12 @@ const CustomerPage: React.FC = () => {
       treatmentDetails: '',
       notes: ''
   });
+
+  // Treatment Modal State
+  const [isAddTreatmentModalOpen, setIsAddTreatmentModalOpen] = useState(false);
+  const [treatmentForm, setTreatmentForm] = useState({ treatmentName: '', details: '', doctorName: 'หมอฟ้า', unitsUsed: 1, doctorFee: 0 });
+  const [treatmentPhotos, setTreatmentPhotos] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
 
   // Filter Logic
   const filtered = customers.filter(c =>
@@ -88,6 +94,35 @@ const CustomerPage: React.FC = () => {
       }
   };
 
+  // Treatment Modal Handlers
+  const handleTreatmentPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files) return;
+      const arr = Array.from(files) as File[];
+      setTreatmentPhotos(arr);
+      const previews = arr.map(f => URL.createObjectURL(f));
+      setPhotoPreviews(previews);
+  };
+
+  const handleAddTreatmentSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!selectedCustomer) return;
+      const success = await addTreatmentRecord(selectedCustomer.id, {
+          treatmentName: treatmentForm.treatmentName,
+          details: treatmentForm.details,
+          doctorName: treatmentForm.doctorName,
+          unitsUsed: treatmentForm.unitsUsed,
+          doctorFee: treatmentForm.doctorFee,
+          photos: treatmentPhotos
+      });
+      if (success) {
+          setIsAddTreatmentModalOpen(false);
+          setTreatmentPhotos([]);
+          setPhotoPreviews([]);
+          setTreatmentForm({ treatmentName: '', details: '', doctorName: 'หมอฟ้า', unitsUsed: 1, doctorFee: 0 });
+      }
+  };
+
   // --- Render Detail View ---
   if (selectedCustomer) {
       return (
@@ -103,6 +138,12 @@ const CustomerPage: React.FC = () => {
                         className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-700 shadow-sm"
                      >
                         <Edit size={16} /> แก้ไขข้อมูล
+                     </button>
+                     <button 
+                        onClick={() => setIsAddTreatmentModalOpen(true)}
+                        className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-lg hover:bg-rose-50 text-rose-600 shadow-sm"
+                     >
+                        <Stethoscope size={16} /> บันทึกการรักษา
                      </button>
                      <button 
                         onClick={() => handleDeleteCustomer(selectedCustomer.id)}
@@ -190,6 +231,7 @@ const CustomerPage: React.FC = () => {
                                     <th className="p-4 font-medium text-gray-500">รายการ</th>
                                     <th className="p-4 font-medium text-gray-500">รายละเอียด</th>
                                     <th className="p-4 font-medium text-gray-500">แพทย์</th>
+                                    <th className="p-4 font-medium text-gray-500">รูปภาพ</th>
                                     <th className="p-4 font-medium text-gray-500">การใช้งาน</th>
                                 </tr>
                             </thead>
@@ -202,12 +244,57 @@ const CustomerPage: React.FC = () => {
                                         <td className="p-4 text-gray-600 text-sm flex items-center gap-1">
                                             <Stethoscope size={14} /> {rec.doctorName}
                                         </td>
+                                        <td className="p-4">
+                                            {rec.photos && rec.photos.length > 0 ? (
+                                                <div className="flex items-center gap-2">
+                                                    {rec.photos.map((p, idx) => (
+                                                        <img key={idx} src={p} alt={`photo-${idx}`} className="w-14 h-14 object-cover rounded-md border" />
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-400 text-sm">-</span>
+                                            )}
+                                        </td>
                                         <td className="p-4 text-rose-600 font-medium text-sm">-{rec.unitsUsed} ครั้ง</td>
                                     </tr>
                                 ))}
                                 {selectedCustomer.treatmentHistory.length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className="p-8 text-center text-gray-400">ยังไม่มีประวัติการรักษา</td>
+                                        <td colSpan={6} className="p-8 text-center text-gray-400">ยังไม่มีประวัติการรักษา</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2 mt-8">
+                        <Package className="text-rose-500" />
+                        ประวัติการสั่งซื้อ (Purchase History)
+                    </h3>
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left whitespace-nowrap">
+                            <thead className="bg-gray-50 border-b border-gray-100">
+                                <tr>
+                                    <th className="p-4 font-medium text-gray-500">วันที่</th>
+                                    <th className="p-4 font-medium text-gray-500">รายการ</th>
+                                    <th className="p-4 font-medium text-gray-500">รวม</th>
+                                    <th className="p-4 font-medium text-gray-500">ช่องทางชำระ</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {transactions.filter(t => t.customerId === selectedCustomer.id).map(tx => (
+                                    <tr key={tx.id} className="hover:bg-gray-50">
+                                        <td className="p-4 text-gray-600 text-sm">{tx.date.split('T')[0]}</td>
+                                        <td className="p-4 text-gray-600 text-sm max-w-xs truncate">{tx.items.map(it => `${it.quantity}x ${it.name}`).join(', ')}</td>
+                                        <td className="p-4 font-medium text-gray-800">{tx.totalAmount}</td>
+                                        <td className="p-4 text-gray-600 text-sm">{tx.paymentMethod}</td>
+                                    </tr>
+                                ))}
+                                {transactions.filter(t => t.customerId === selectedCustomer.id).length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="p-8 text-center text-gray-400">ยังไม่มีประวัติการสั่งซื้อ</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -358,6 +445,81 @@ const CustomerPage: React.FC = () => {
                             <div className="flex gap-3 mt-6">
                                 <button type="button" onClick={() => setIsUseCourseModalOpen(false)} className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">ยกเลิก</button>
                                 <button type="submit" className="flex-1 py-2 bg-rose-500 text-white rounded-lg shadow-md hover:bg-rose-600">ยืนยันการตัดคอร์ส</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Add Treatment Modal */}
+            {isAddTreatmentModalOpen && selectedCustomer && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+                        <div className="border-b pb-4 mb-4">
+                            <h3 className="text-xl font-bold text-gray-800">บันทึกการรักษาใหม่</h3>
+                            <p className="text-gray-500 text-sm">ลูกค้า: {selectedCustomer.name}</p>
+                        </div>
+                        
+                        <form onSubmit={handleAddTreatmentSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อหัตถการ</label>
+                                <input
+                                    className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-rose-500"
+                                    value={treatmentForm.treatmentName}
+                                    onChange={e => setTreatmentForm({...treatmentForm, treatmentName: e.target.value})}
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">รายละเอียด</label>
+                                <textarea
+                                    className="w-full border border-gray-300 p-2 rounded-lg h-24 focus:ring-2 focus:ring-rose-500"
+                                    value={treatmentForm.details}
+                                    onChange={e => setTreatmentForm({...treatmentForm, details: e.target.value})}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">แพทย์</label>
+                                    <input
+                                        className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-rose-500"
+                                        value={treatmentForm.doctorName}
+                                        onChange={e => setTreatmentForm({...treatmentForm, doctorName: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">จำนวนครั้งที่ใช้</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-rose-500"
+                                        value={treatmentForm.unitsUsed}
+                                        onChange={e => setTreatmentForm({...treatmentForm, unitsUsed: parseInt(e.target.value) || 1})}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">รูปก่อน / หลัง (เลือกหลายรูปได้)</label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={handleTreatmentPhotoChange}
+                                    className="w-full border border-gray-300 p-2 rounded-lg"
+                                />
+                                {photoPreviews.length > 0 && (
+                                    <div className="flex gap-2 mt-3 overflow-x-auto">
+                                        {photoPreviews.map((p, idx) => (
+                                            <img key={idx} src={p} alt={`preview-${idx}`} className="w-20 h-20 object-cover rounded-md border border-gray-200" />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex gap-3 mt-6">
+                                <button type="button" onClick={() => setIsAddTreatmentModalOpen(false)} className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">ยกเลิก</button>
+                                <button type="submit" className="flex-1 py-2 bg-rose-500 text-white rounded-lg shadow-md hover:bg-rose-600">บันทึกการรักษา</button>
                             </div>
                         </form>
                     </div>

@@ -16,8 +16,10 @@ const isValidUrl = (urlString: string | null): boolean => {
 };
 
 // 1. Try to get config from Environment Variables
+// ⚠️ IMPORTANT: Always use ANON_KEY in frontend, never use SERVICE_ROLE_KEY
+// SERVICE_ROLE_KEY bypasses RLS and should only be used in server-side code
 const ENV_URL = process.env.SUPABASE_URL;
-const ENV_KEY = process.env.SUPABASE_ANON_KEY;
+const ENV_KEY = process.env.SUPABASE_ANON_KEY; // Use anon key, not service role key
 
 // 2. Try to get config from Local Storage (for runtime configuration override)
 const LOCAL_URL = typeof window !== 'undefined' ? localStorage.getItem('sb_url') : null;

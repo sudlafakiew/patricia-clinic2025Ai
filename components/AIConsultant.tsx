@@ -70,10 +70,15 @@ const AIConsultant: React.FC = () => {
                     {loading ? 'กำลังวิเคราะห์ข้อมูล...' : 'วิเคราะห์และแนะนำบริการ'}
                 </button>
                 
-                {!process.env.API_KEY && (
-                   <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-3 rounded-lg text-sm">
-                      <AlertCircle size={16} />
-                      <span>Demo Mode: AI features require an API KEY in environment.</span>
+                     {!( (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env?.VITE_GEMINI_API_KEY || process.env?.GEMINI_API_KEY) && (
+                         <div className="flex items-start gap-2 text-red-600 bg-red-50 p-4 rounded-lg text-sm border border-red-200">
+                      <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold mb-1">❌ Gemini API Key ยังไม่ได้ตั้งค่า</p>
+                        <p className="text-xs text-red-500">กรุณาสร้างไฟล์ .env.local และเพิ่ม:</p>
+                        <code className="text-xs bg-red-100 px-2 py-1 rounded block mt-1">VITE_GEMINI_API_KEY=your-key-here</code>
+                        <p className="text-xs mt-1">จากนั้นรีสตาร์ท dev server</p>
+                      </div>
                    </div>
                 )}
             </div>
